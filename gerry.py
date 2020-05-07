@@ -33,7 +33,6 @@ def getRiverPoints():
     # load array with all state border vertices
     riverpoints = []
     for shp in rivershapes.shapeRecords():
-        # MIGHT NOT NEED TO ROUND
         for pt in shp.shape.points:
             riverpoints.append((round(pt[0], 5), round(pt[1], 5)))
     return riverpoints
@@ -76,7 +75,6 @@ def createCoordMatrix(statepoints, riverpoints):
         # shift over and multiply by 10^4 to offset rounding
         lat = int((pt[0] + 180) * 10**5)
         long = int(pt[1] * 10**5)
-        #print(pt)
         pointmatrix[lat][long] = 1
     #iterate thru all riverpoints, set all coords where a river vertice exists to 1 (very slow/long list)
     for pt in riverpoints:
@@ -98,23 +96,21 @@ def createCoordMatrix(statepoints, riverpoints):
 def countVertices(shape, pointmatrix):
     # get total points in shape
     totalpts = len(shape.points)
+    pts = totalpts
     #print(totalpts)
     #check if vertice is part of the river/state borders
     for point in shape.points:
         lat = int((round(point[0], 5) + 180) * 10**5)
         long = int(round(point[1], 5) * 10**5)
         if pointmatrix[lat][long]:
-            totalpts -= 1
+            pts -= 1
     #print(totalpts)
-    return totalpts
+    return pts / totalpts
 
-# INPUTS:  pointmatrix - a 2d list of boolean values where row refers to latitude, col refers to longitude
-#                        if pointmatrix[row][col] == 1, coordinate is a part of a state line or river
-#                        if pointmatrix[row][col] == 0, coordinate is not part of a state line or river
 # FUNCTIONALITY:
-#          For each district shape. A grayscale value is calculated (VERY CRUDELY) and is used to fill each shape
+#          For each district shape. A grayscale value is calculated and is used to fill each shape
 #
-def drawDistricts():
+def drawDistricts(pointmatrix):
     # open US districts shapefile
     file = "data/tl_2018_us_cd116.shp"
     districts = shapefile.Reader(file)
@@ -124,13 +120,6 @@ def drawDistricts():
     for rec in districts.shapeRecords():
         # calculate CRUDE grayscale value (0 = black, 1 = white). Divide by ugly crud number I used to achieve a grayscale
 
-        # vertice method commented out
-            # black is more gerrymandered
-            # grayscale = 1 - countVertices(rec.shape, pointmatrix) / maxVertices #10000
-            # grayscale = min(grayscale, 1.0)
-            # grayscale = max(grayscale, 0.0)
-            #color = str(grayscale)
-
         #area/perim method
         shape = Polygon(rec.shape.points)
         shp_area = shape.area
@@ -138,6 +127,10 @@ def drawDistricts():
 
         ratio = shp_perim / shp_area
         greyscale = ratio / 20
+        
+        #vertice method
+        greyscale += countVertices(rec.shape, pointmatrix) * 0.1
+        
         #round down
         if greyscale > 1:
             greyscale = 1.0
@@ -174,8 +167,7 @@ def drawStates():
 # FUNCTIONALITY:
 #               Draw the map using matplotlib
 #
-# Previously was "drawMap(pointmatrix, args):"
-def drawMap(args):
+def drawMap(pointmatrix, args):
     #output with matplotlib
         dimensions = getDimensions(args.region)
         # dimensions of popup plot window
@@ -193,7 +185,7 @@ def drawMap(args):
         # add and subtract 1 to each direction to give a little buffer around the ranges we are looking at
         plt.xlim(round(xmin - 1), round(xmax + 1))
         plt.ylim(round(ymin - 1), round(ymax + 1))
-        drawDistricts()
+        drawDistricts(pointmatrix)
         plt.show()
 
 # FUNCTIONALITY: I really crudely made the project prompt the user to enter state name, abreviation, or empty string to zoom
@@ -231,10 +223,10 @@ def main():
     parser.set_defaults()
     args = parser.parse_args()
     # logic
-    #state_points = getStatePoints()
+    state_points = getStatePoints()
     #river_points = getRiverPoints()
-    #point_matrix = createCoordMatrix2(state_points)
-    drawMap(args)
+    point_matrix = createCoordMatrix2(state_points)
+    drawMap(pointmatrix, args)
 
 
 # necessary for some reason lol
